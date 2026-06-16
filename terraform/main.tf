@@ -18,6 +18,7 @@ provider "aws" {
 resource "aws_ecr_repository" "lambda_repo" {
   name                 = var.project_name
   image_tag_mutability = "MUTABLE" # permite sobrescrever a tag "latest"
+  force_delete         = var.force_delete_ecr
 
   image_scanning_configuration {
     scan_on_push = true # escaneia vulnerabilidades automaticamente a cada push

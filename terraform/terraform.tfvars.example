@@ -1,0 +1,4 @@
+aws_region       = "us-east-1"
+project_name     = "user-lambda-api"
+environment      = "production"
+force_delete_ecr = true

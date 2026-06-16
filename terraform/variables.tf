@@ -15,3 +15,9 @@ variable "environment" {
   type        = string
   default     = "production"
 }
+
+variable "force_delete_ecr" {
+  description = "Permite deletar o repositório ECR mesmo com imagens. Use true apenas em dev/staging."
+  type        = bool
+  default     = false
+}
