@@ -11,8 +11,8 @@ on:
 # Variáveis de ambiente globais
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: bruno-lambda-api      # mesmo nome do project_name no Terraform
-  LAMBDA_FUNCTION: bruno-lambda-api     # mesmo nome da Lambda
+  ECR_REPOSITORY: user-lambda-api      # mesmo nome do project_name no Terraform
+  LAMBDA_FUNCTION: user-lambda-api     # mesmo nome da Lambda
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
