@@ -27,7 +27,7 @@ def lambda_handler(event, context):
 
 def handle_root(event, context):
     return response(200, {
-        "message": "API Lambda rodando via CI/CD",
+        "message": "API Lambda rodando via CI/CD — deploy automático funcionando",
         "author":  "Bruno Queiroz",
         "routes": ["/", "/health", "/info"],
     })
