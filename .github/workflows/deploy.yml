@@ -1,0 +1,116 @@
+# GitHub Actions — Pipeline CI/CD
+# Arquivo deve ficar em: .github/workflows/deploy.yml
+#
+# Esse pipeline roda automaticamente a cada push na branch main
+# e faz o deploy completo da API Lambda na AWS
+
+name: Deploy Lambda API
+
+# Gatilho: roda quando há push na branch main
+on:
+  push:
+    branches: [main]
+  # Permite rodar manualmente pelo GitHub (Actions > Run workflow)
+  workflow_dispatch:
+
+# Variáveis de ambiente globais — disponíveis em todos os jobs
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: bruno-lambda-api      # mesmo nome do project_name no Terraform
+  LAMBDA_FUNCTION: bruno-lambda-api     # mesmo nome da Lambda
+
+jobs:
+  deploy:
+    name: Build e Deploy
+    runs-on: ubuntu-latest   # roda em uma VM Ubuntu gerenciada pelo GitHub (gratuito)
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      # Baixa o código do repositório para a VM do GitHub Actions
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      # ── 2. Configurar credenciais AWS ─────────────────────────────────────────
+      # Usa as credenciais salvas nos Secrets do GitHub
+      # Secrets ficam em: Settings > Secrets and variables > Actions
+      # Nunca coloque credenciais diretamente no código!
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      # ── 3. Login no ECR ───────────────────────────────────────────────────────
+      # Autentica o Docker na registry privada da AWS (ECR)
+      # Sem isso, o docker push seria rejeitado por falta de permissão
+      - name: Login no Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── 4. Build e Push da imagem Docker ──────────────────────────────────────
+      # Constrói a imagem com a data/hora atual como argumento de build
+      # Faz push para o ECR com a tag "latest"
+      - name: Build e Push imagem Docker
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          DEPLOYED_AT:  ${{ github.event.head_commit.timestamp }}
+        run: |
+          # Monta a URL completa da imagem no ECR
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+          echo "Construindo imagem: $IMAGE_URI"
+
+          # Build da imagem passando o timestamp como argumento
+          docker build \
+            --build-arg DEPLOYED_AT="$DEPLOYED_AT" \
+            --tag "$IMAGE_URI" \
+            .
+
+          # Push para o ECR
+          docker push "$IMAGE_URI"
+
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+
+      # ── 5. Deploy na Lambda ───────────────────────────────────────────────────
+      # Atualiza a Lambda para usar a nova imagem que acabou de ser publicada no ECR
+      - name: Deploy na Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name "$LAMBDA_FUNCTION" \
+            --image-uri     "$IMAGE_URI"
+
+      # ── 6. Aguardar Lambda ficar pronta ───────────────────────────────────────
+      # A Lambda fica em estado "Updating" por alguns segundos após o deploy
+      # Esse comando aguarda ela ficar "Active" antes de continuar
+      - name: Aguardar Lambda ficar ativa
+        run: |
+          aws lambda wait function-updated \
+            --function-name "$LAMBDA_FUNCTION"
+          echo "Deploy concluído com sucesso!"
+
+      # ── 7. Smoke test ─────────────────────────────────────────────────────────
+      # Teste básico para confirmar que a API está respondendo após o deploy
+      # Se retornar status != 200, o pipeline falha e você é notificado
+      - name: Smoke test — verificar API
+        run: |
+          # Busca a URL da API via AWS CLI
+          API_URL=$(aws lambda get-function-url-config \
+            --function-name "$LAMBDA_FUNCTION" \
+            --query 'FunctionUrl' \
+            --output text 2>/dev/null || echo "")
+
+          if [ -z "$API_URL" ]; then
+            echo "URL da Lambda Function URL não encontrada — pulando smoke test"
+            exit 0
+          fi
+
+          echo "Testando: ${API_URL}health"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${API_URL}health")
+
+          if [ "$STATUS" = "200" ]; then
+            echo "Smoke test passou! Status: $STATUS"
+          else
+            echo "Smoke test falhou! Status: $STATUS"
+            exit 1
+          fi
