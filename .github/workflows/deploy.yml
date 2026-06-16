@@ -24,12 +24,12 @@ jobs:
       # 1. Checkout
       # Baixa o código do repositório para a VM do GitHub Actions
       - name: Checkout código
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v4
 
       # 2. Configurar credenciais AWS
       # Usa as credenciais salvas nos Secrets do GitHub
       - name: Configurar credenciais AWS
-        uses: aws-actions/configure-aws-credentials@v4.1.0
+        uses: aws-actions/configure-aws-credentials@v6.1.0
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
